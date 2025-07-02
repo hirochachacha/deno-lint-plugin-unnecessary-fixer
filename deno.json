@@ -1,0 +1,19 @@
+{
+  "tasks": {
+    "test": "deno test tests/ --allow-read --no-check",
+    "test:watch": "deno test tests/ --allow-read --no-check --watch",
+    "lint": "deno lint",
+    "lint:fixtures": "deno lint tests/fixtures/"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  },
+  "lint": {
+    "plugins": ["./src/plugin.ts"],
+    "rules": {
+      "include": [
+        "no-unnecessary-fixer/no-unnecessary-type-assertion"
+      ]
+    }
+  }
+}
