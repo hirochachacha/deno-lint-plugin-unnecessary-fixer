@@ -1,4 +1,15 @@
 {
+  "name": "@hirochachacha/deno-lint-plugin-unnecessary-fixer",
+  "version": "0.1.0",
+  "description": "A Deno lint plugin that detects and fixes unnecessary code patterns including redundant type assertions, boolean comparisons, and type conversions",
+  "exports": "./src/plugin.ts",
+  "publish": {
+    "include": [
+      "src/**/*.ts",
+      "README.md",
+      "LICENSE"
+    ]
+  },
   "tasks": {
     "test": "deno test tests/ --allow-read --no-check",
     "test:watch": "deno test tests/ --allow-read --no-check --watch",

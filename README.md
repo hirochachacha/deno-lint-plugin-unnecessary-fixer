@@ -1,29 +1,57 @@
-# Deno Lint Plugin - No Unnecessary Type Assertions
+# Deno Lint Plugin - Unnecessary Code Fixer
 
-A Deno lint plugin that detects and automatically fixes unnecessary type
-assertions in TypeScript code.
+A Deno lint plugin that detects and automatically fixes unnecessary code
+patterns in TypeScript, including redundant type assertions, boolean
+comparisons, and type conversions.
 
 ## Features
 
-- **Unnecessary type assertions**: Detects when types are asserted unnecessarily
-  - Same type assertions: `(variable as Type)` when variable is already `Type`
-  - Literal type assertions: `<number>42`, `"hello" as string`
-  - Property access assertions: `(obj as Type).prop` → `obj.prop`
-  - Non-null assertions: `value!` when value is not nullable
-  - Type assertions on expressions that already produce the target type
+This plugin provides three rules to clean up your TypeScript code:
+
+### 1. **no-unnecessary-type-assertion**
+
+Detects when types are asserted unnecessarily:
+
+- Same type assertions: `(variable as Type)` when variable is already `Type`
+- Literal type assertions: `<number>42`, `"hello" as string`
+- Property access assertions: `(obj as Type).prop` → `obj.prop`
+- Non-null assertions: `value!` when value is not nullable
+- Type assertions on expressions that already produce the target type
+
+### 2. **no-unnecessary-boolean-literal-compare**
+
+Detects unnecessary boolean literal comparisons:
+
+- `someCondition === true` → `someCondition`
+- `someCondition !== true` → `!someCondition`
+- `someCondition === false` → `!someCondition`
+- `someCondition !== false` → `someCondition`
+
+### 3. **no-unnecessary-type-conversion**
+
+Detects redundant type conversions:
+
+- `String('text')` → `'text'`
+- `'text'.toString()` → `'text'`
+- `Number(123)` → `123`
+- `+123` → `123`
+- `Boolean(true)` → `true`
+- `!!true` → `true`
+- Empty string concatenations: `'' + 'text'` → `'text'`
 
 ## Installation
 
-1. Clone this repository
-2. Configure your `deno.json` to include the plugin:
+1. Configure your `deno.json` to include the plugin:
 
 ```json
 {
   "lint": {
-    "plugins": ["./path/to/src/plugin.ts"],
+    "plugins": ["jsr:@hirochachacha/deno-lint-plugin-unnecessary-fixer"],
     "rules": {
       "include": [
-        "no-unnecessary-fixer/no-unnecessary-type-assertion"
+        "unnecessary-fixer/no-unnecessary-type-assertion",
+        "unnecessary-fixer/no-unnecessary-boolean-literal-compare",
+        "unnecessary-fixer/no-unnecessary-type-conversion"
       ]
     }
   }

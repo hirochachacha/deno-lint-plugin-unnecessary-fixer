@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-unused-vars unnecessary-fixer/no-unnecessary-type-conversion
 // Test cases for no-unnecessary-type-conversion rule
 
 // Incorrect patterns that should be fixed:
@@ -24,7 +25,7 @@ BigInt(1); // should be BigInt(1)
 
 // Assignment with empty string
 let str = "123";
- // should be deleted
+// should be deleted
 
 // With variables
 const myString = "hello";

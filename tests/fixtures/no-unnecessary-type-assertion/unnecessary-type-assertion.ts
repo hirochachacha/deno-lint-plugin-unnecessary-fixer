@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any unnecessary-fixer/no-unnecessary-type-assertion
 // This file demonstrates unnecessary type assertions
 
 type A = {
