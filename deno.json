@@ -12,7 +12,9 @@
     "plugins": ["./src/plugin.ts"],
     "rules": {
       "include": [
-        "no-unnecessary-fixer/no-unnecessary-type-assertion"
+        "unnecessary-fixer/no-unnecessary-type-assertion",
+        "unnecessary-fixer/no-unnecessary-boolean-literal-compare",
+        "unnecessary-fixer/no-unnecessary-type-conversion"
       ]
     }
   }
