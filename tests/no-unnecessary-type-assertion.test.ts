@@ -371,6 +371,30 @@ Deno.test("no-unnecessary-type-assertion: ignores cast to any for non-existent p
   assertEquals(reports.length, 0);
 });
 
+Deno.test("no-unnecessary-type-assertion: allows type narrowing from unknown/any types", () => {
+  const { context, reports } = createMockContext("");
+
+  const visitor = rule.create(context);
+
+  // This test simulates accessing Event.target.value where target is of type unknown
+  // The type assertion (e.target as HTMLTextAreaElement) should NOT be flagged
+  visitor.TSAsExpression({
+    type: "TSAsExpression",
+    expression: {
+      type: "MemberExpression",
+      object: { type: "Identifier", name: "e" },
+      property: { type: "Identifier", name: "target" },
+    },
+    typeAnnotation: {
+      type: "TSTypeReference",
+      typeName: { type: "Identifier", name: "HTMLTextAreaElement" },
+    },
+  });
+
+  // Should not report - type narrowing from unknown/any is necessary
+  assertEquals(reports.length, 0);
+});
+
 Deno.test("no-unnecessary-type-assertion: handles TSTypeAssertion (older syntax)", () => {
   const { context, reports } = createMockContext("");
 
@@ -535,4 +559,163 @@ Deno.test("no-unnecessary-type-assertion: resolves type aliases for numeric expr
 
   assertEquals(reports.length, 1);
   assertEquals(reports[0].message, "Unnecessary type assertion");
+});
+
+
+Deno.test("no-unnecessary-type-assertion: detects unnecessary string type assertion", () => {
+  const { context, reports } = createMockContext("");
+  const visitor = rule.create(context);
+
+  // Track string variable
+  visitor.VariableDeclarator({
+    type: "VariableDeclarator",
+    id: {
+      type: "Identifier",
+      name: "str",
+      typeAnnotation: {
+        typeAnnotation: {
+          type: "TSStringKeyword",
+        },
+      },
+    },
+  });
+
+  // Check: str as string
+  visitor.TSAsExpression({
+    type: "TSAsExpression",
+    expression: { type: "Identifier", name: "str" },
+    typeAnnotation: { type: "TSStringKeyword" },
+  });
+
+  assertEquals(reports.length, 1);
+  assertEquals(
+    reports[0].message,
+    "Unnecessary type assertion - 'str' is already type 'string'",
+  );
+});
+
+Deno.test("no-unnecessary-type-assertion: detects unnecessary interface assertion", () => {
+  const { context, reports } = createMockContext("");
+  const visitor = rule.create(context);
+
+  // Track interface declaration
+  visitor.TSInterfaceDeclaration({
+    type: "TSInterfaceDeclaration",
+    id: { type: "Identifier", name: "User" },
+    body: {
+      type: "TSInterfaceBody",
+      body: [
+        {
+          type: "TSPropertySignature",
+          key: { type: "Identifier", name: "name" },
+        },
+      ],
+    },
+  });
+
+  // Track variable with interface type
+  visitor.VariableDeclarator({
+    type: "VariableDeclarator",
+    id: {
+      type: "Identifier",
+      name: "user",
+      typeAnnotation: {
+        typeAnnotation: {
+          type: "TSTypeReference",
+          typeName: { type: "Identifier", name: "User" },
+        },
+      },
+    },
+  });
+
+  // Check: user as User
+  visitor.TSAsExpression({
+    type: "TSAsExpression",
+    expression: { type: "Identifier", name: "user" },
+    typeAnnotation: {
+      type: "TSTypeReference",
+      typeName: { type: "Identifier", name: "User" },
+    },
+  });
+
+  assertEquals(reports.length, 1);
+  assertEquals(
+    reports[0].message,
+    "Unnecessary type assertion - 'user' is already type 'User'",
+  );
+});
+
+Deno.test("no-unnecessary-type-assertion: detects unnecessary array type assertion", () => {
+  const { context, reports } = createMockContext("");
+  const visitor = rule.create(context);
+
+  // Track array variable
+  visitor.VariableDeclarator({
+    type: "VariableDeclarator",
+    id: {
+      type: "Identifier",
+      name: "arr",
+      typeAnnotation: {
+        typeAnnotation: {
+          type: "TSArrayType",
+          elementType: { type: "TSNumberKeyword" },
+        },
+      },
+    },
+  });
+
+  // Check: arr as number[]
+  visitor.TSAsExpression({
+    type: "TSAsExpression",
+    expression: { type: "Identifier", name: "arr" },
+    typeAnnotation: {
+      type: "TSArrayType",
+      elementType: { type: "TSNumberKeyword" },
+    },
+  });
+
+  assertEquals(reports.length, 1);
+  assertEquals(
+    reports[0].message,
+    "Unnecessary type assertion - 'arr' is already type 'number[]'",
+  );
+});
+
+Deno.test("no-unnecessary-type-assertion: detects Array<T> vs T[] equivalence", () => {
+  const { context, reports } = createMockContext("");
+  const visitor = rule.create(context);
+
+  // Track array variable with T[] syntax
+  visitor.VariableDeclarator({
+    type: "VariableDeclarator",
+    id: {
+      type: "Identifier",
+      name: "arr",
+      typeAnnotation: {
+        typeAnnotation: {
+          type: "TSArrayType",
+          elementType: { type: "TSStringKeyword" },
+        },
+      },
+    },
+  });
+
+  // Check: arr as Array<string> (should be equivalent to string[])
+  visitor.TSAsExpression({
+    type: "TSAsExpression",
+    expression: { type: "Identifier", name: "arr" },
+    typeAnnotation: {
+      type: "TSTypeReference",
+      typeName: { type: "Identifier", name: "Array" },
+      typeParameters: {
+        params: [{ type: "TSStringKeyword" }],
+      },
+    },
+  });
+
+  assertEquals(reports.length, 1);
+  assertEquals(
+    reports[0].message,
+    "Unnecessary type assertion - 'arr' is already type 'string[]'",
+  );
 });

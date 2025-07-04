@@ -50,6 +50,37 @@ export const noUnnecessaryTypeAssertion = {
         }
       },
 
+      // Track interface declarations
+      TSInterfaceDeclaration(node: any) {
+        if (node.id && node.id.type === "Identifier") {
+          const properties = new Set<string>();
+
+          // Track interface properties
+          if (node.body && node.body.body) {
+            node.body.body.forEach((member: any) => {
+              if (
+                member.type === "TSPropertySignature" &&
+                member.key?.type === "Identifier"
+              ) {
+                properties.add(member.key.name);
+              } else if (
+                member.type === "TSMethodSignature" &&
+                member.key?.type === "Identifier"
+              ) {
+                properties.add(member.key.name);
+              }
+            });
+          }
+
+          typeInfo.set(node.id.name, {
+            type: "interface",
+            interfaceName: node.id.name,
+            node: node,
+            properties: properties,
+          });
+        }
+      },
+
       // Track class declarations
       ClassDeclaration(node: any) {
         if (node.id) {
@@ -84,6 +115,20 @@ export const noUnnecessaryTypeAssertion = {
       // Check TSAsExpression (TypeScript "as" casting)
       TSAsExpression(node: any) {
         const isCastToAny = node.typeAnnotation.type === "TSAnyKeyword";
+
+        // Skip type assertions on member expressions where we're narrowing from unknown/any
+        // e.g., (e.target as HTMLTextAreaElement) where target might be unknown
+        if (!isCastToAny && node.expression.type === "MemberExpression") {
+          // For now, we'll be conservative and not flag any type assertions on member expressions
+          // where we don't have full type information about the object or property
+          const objectName = node.expression.object.type === "Identifier"
+            ? node.expression.object.name
+            : null;
+          if (!objectName || !typeInfo.has(objectName)) {
+            // We don't have type info for the object, so the assertion might be necessary
+            return;
+          }
+        }
 
         // Check for type assertions on literals or expressions
         if (
@@ -157,11 +202,14 @@ export const noUnnecessaryTypeAssertion = {
             const castTypeName = getCastTypeName(node.typeAnnotation);
             const actualTypeName = getActualTypeName(varInfo);
 
-            if (castTypeName === actualTypeName) {
+            if (
+              castTypeName && actualTypeName &&
+              typesAreEquivalent(castTypeName, actualTypeName)
+            ) {
               context.report({
                 node: node,
                 message:
-                  `Unnecessary type assertion - '${varName}' is already type '${castTypeName}'`,
+                  `Unnecessary type assertion - '${varName}' is already type '${actualTypeName}'`,
                 fix(fixer: any) {
                   return fixer.replaceText(node, varName);
                 },
@@ -213,11 +261,14 @@ export const noUnnecessaryTypeAssertion = {
             const castTypeName = getCastTypeName(node.typeAnnotation);
             const actualTypeName = getActualTypeName(varInfo);
 
-            if (castTypeName === actualTypeName) {
+            if (
+              castTypeName && actualTypeName &&
+              typesAreEquivalent(castTypeName, actualTypeName)
+            ) {
               context.report({
                 node: node,
                 message:
-                  `Unnecessary type assertion - '${varName}' is already type '${castTypeName}'`,
+                  `Unnecessary type assertion - '${varName}' is already type '${actualTypeName}'`,
                 fix(fixer: any) {
                   return fixer.replaceText(node, varName);
                 },
@@ -262,13 +313,60 @@ export const noUnnecessaryTypeAssertion = {
       },
     };
 
-    function getCastTypeName(typeAnnotation: any) {
+    function getCastTypeName(typeAnnotation: any): string | null {
+      // Handle generic Array<T> syntax first
+      if (
+        typeAnnotation.type === "TSTypeReference" &&
+        typeAnnotation.typeName?.type === "Identifier" &&
+        typeAnnotation.typeName.name === "Array" &&
+        typeAnnotation.typeParameters?.params?.length === 1
+      ) {
+        const elementType = getCastTypeName(
+          typeAnnotation.typeParameters.params[0],
+        );
+        return elementType ? `Array<${elementType}>` : null;
+      }
+
+      // Handle type references (custom types, interfaces, classes)
       if (
         typeAnnotation.type === "TSTypeReference" &&
         typeAnnotation.typeName.type === "Identifier"
       ) {
         return typeAnnotation.typeName.name;
       }
+
+      // Handle built-in primitive types
+      if (typeAnnotation.type === "TSStringKeyword") {
+        return "string";
+      }
+      if (typeAnnotation.type === "TSNumberKeyword") {
+        return "number";
+      }
+      if (typeAnnotation.type === "TSBooleanKeyword") {
+        return "boolean";
+      }
+      if (typeAnnotation.type === "TSAnyKeyword") {
+        return "any";
+      }
+      if (typeAnnotation.type === "TSUnknownKeyword") {
+        return "unknown";
+      }
+      if (typeAnnotation.type === "TSVoidKeyword") {
+        return "void";
+      }
+      if (typeAnnotation.type === "TSNullKeyword") {
+        return "null";
+      }
+      if (typeAnnotation.type === "TSUndefinedKeyword") {
+        return "undefined";
+      }
+
+      // Handle array types
+      if (typeAnnotation.type === "TSArrayType") {
+        const elementType = getCastTypeName(typeAnnotation.elementType);
+        return elementType ? `${elementType}[]` : null;
+      }
+
       return null;
     }
 
@@ -276,14 +374,11 @@ export const noUnnecessaryTypeAssertion = {
       if (varInfo.type === "class") {
         return varInfo.className;
       }
+      if (varInfo.type === "interface") {
+        return varInfo.interfaceName;
+      }
       if (varInfo.type && varInfo.type.typeAnnotation) {
-        const annotation = varInfo.type.typeAnnotation;
-        if (
-          annotation.type === "TSTypeReference" &&
-          annotation.typeName.type === "Identifier"
-        ) {
-          return annotation.typeName.name;
-        }
+        return getCastTypeName(varInfo.type.typeAnnotation);
       }
       return null;
     }
@@ -442,6 +537,28 @@ export const noUnnecessaryTypeAssertion = {
       // Optional types are nullable
       if (annotation.type === "TSOptionalType") {
         return true;
+      }
+
+      return false;
+    }
+
+    function typesAreEquivalent(type1: string, type2: string): boolean {
+      // Direct match
+      if (type1 === type2) return true;
+
+      // Handle Array<T> vs T[] equivalence
+      const arrayGenericMatch = type1.match(/^Array<(.+)>$/);
+      const arrayBracketMatch = type2.match(/^(.+)\[\]$/);
+
+      if (arrayGenericMatch && arrayBracketMatch) {
+        return arrayGenericMatch[1] === arrayBracketMatch[1];
+      }
+
+      const arrayGenericMatch2 = type2.match(/^Array<(.+)>$/);
+      const arrayBracketMatch2 = type1.match(/^(.+)\[\]$/);
+
+      if (arrayGenericMatch2 && arrayBracketMatch2) {
+        return arrayGenericMatch2[1] === arrayBracketMatch2[1];
       }
 
       return false;
