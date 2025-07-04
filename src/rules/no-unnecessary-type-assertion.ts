@@ -176,11 +176,23 @@ export const noUnnecessaryTypeAssertion = {
           return;
         }
 
-        // Check if used in member expression - these casts are always unnecessary
+        // Check if used in member expression
         if (
           node.parent?.type === "MemberExpression" &&
           node.parent.object === node
         ) {
+          // Skip if the expression is of type unknown - the assertion is necessary
+          if (node.expression.type === "Identifier") {
+            const varName = node.expression.name;
+            const varInfo = typeInfo.get(varName);
+            if (
+              varInfo &&
+              varInfo.type?.typeAnnotation?.type === "TSUnknownKeyword"
+            ) {
+              return;
+            }
+          }
+
           context.report({
             node: node,
             message: `Unnecessary type assertion when accessing property`,
@@ -221,11 +233,23 @@ export const noUnnecessaryTypeAssertion = {
 
       // Also check TSTypeAssertion (older <Type> syntax)
       TSTypeAssertion(node: any) {
-        // Check if used in member expression - these casts are always unnecessary
+        // Check if used in member expression
         if (
           node.parent?.type === "MemberExpression" &&
           node.parent.object === node
         ) {
+          // Skip if the expression is of type unknown - the assertion is necessary
+          if (node.expression.type === "Identifier") {
+            const varName = node.expression.name;
+            const varInfo = typeInfo.get(varName);
+            if (
+              varInfo &&
+              varInfo.type?.typeAnnotation?.type === "TSUnknownKeyword"
+            ) {
+              return;
+            }
+          }
+
           context.report({
             node: node,
             message: `Unnecessary type assertion when accessing property`,
